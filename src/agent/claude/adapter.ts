@@ -57,6 +57,7 @@ export class ClaudeAdapter implements AgentAdapter {
       throw new Error('cwd is required for ClaudeAdapter.run');
     }
 
+    const permissionMode = opts.permissionMode ?? CLAUDE_DEFAULT_PERMISSION_MODE;
     const args = [
       '-p',
       opts.prompt,
@@ -64,10 +65,16 @@ export class ClaudeAdapter implements AgentAdapter {
       'stream-json',
       '--verbose',
       '--permission-mode',
-      opts.permissionMode ?? CLAUDE_DEFAULT_PERMISSION_MODE,
+      permissionMode,
       '--append-system-prompt',
       buildBridgeSystemPrompt(this.botIdentity),
     ];
+    // Guest-tier runs must not inherit project/local settings: allow rules
+    // accumulated there (e.g. Bash(...) from interactive sessions) would
+    // punch through the acceptEdits/plan permission gate in headless mode.
+    if (permissionMode !== 'bypassPermissions') {
+      args.push('--setting-sources', 'user');
+    }
     if (opts.sessionId) args.push('--resume', opts.sessionId);
     if (opts.model) args.push('--model', opts.model);
 
