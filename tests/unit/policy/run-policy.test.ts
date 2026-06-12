@@ -62,6 +62,87 @@ describe('run policy', () => {
     },
   );
 
+  it.each([
+    ['allowed-user', 'workspace', 'workspace-write', 'acceptEdits'],
+    ['allowed-admin', 'workspace', 'workspace-write', 'acceptEdits'],
+    ['allowed-chat', 'workspace', 'workspace-write', 'acceptEdits'],
+    ['comment-mention', 'workspace', 'workspace-write', 'acceptEdits'],
+  ] as const)(
+    'caps %s actors at the default guest tier even when the profile allows full',
+    (reason, accessMode, sandbox, permissionMode) => {
+      const result = evaluateRunPolicy({
+        ...baseInput({
+          profileConfig: profile({
+            permissions: { defaultAccess: 'full', maxAccess: 'full' },
+          }),
+        }),
+        access: { ok: true, reason },
+      });
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) throw new Error('expected run policy to allow');
+      expect(result.accessMode).toBe(accessMode);
+      expect(result.sandbox).toBe(sandbox);
+      expect(result.permissionMode).toBe(permissionMode);
+    },
+  );
+
+  it('keeps the owner at the profile tier', () => {
+    const result = evaluateRunPolicy({
+      ...baseInput({
+        profileConfig: profile({
+          permissions: { defaultAccess: 'full', maxAccess: 'full' },
+        }),
+      }),
+      access: { ok: true, reason: 'owner' },
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error('expected run policy to allow');
+    expect(result.accessMode).toBe('full');
+    expect(result.permissionMode).toBe('bypassPermissions');
+  });
+
+  it('honours an explicit guestMaxAccess below the default', () => {
+    const result = evaluateRunPolicy({
+      ...baseInput({
+        profileConfig: profile({
+          permissions: {
+            defaultAccess: 'full',
+            maxAccess: 'full',
+            guestMaxAccess: 'read-only',
+          },
+        }),
+      }),
+      access: { ok: true, reason: 'allowed-user' },
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error('expected run policy to allow');
+    expect(result.accessMode).toBe('read-only');
+    expect(result.permissionMode).toBe('plan');
+  });
+
+  it('does not raise guests above the profile tier', () => {
+    const result = evaluateRunPolicy({
+      ...baseInput({
+        profileConfig: profile({
+          permissions: {
+            defaultAccess: 'read-only',
+            maxAccess: 'read-only',
+            guestMaxAccess: 'workspace',
+          },
+        }),
+      }),
+      access: { ok: true, reason: 'allowed-user' },
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error('expected run policy to allow');
+    expect(result.accessMode).toBe('read-only');
+    expect(result.permissionMode).toBe('plan');
+  });
+
   it('does not raise access above capability maxAccess', () => {
     const result = evaluateRunPolicy({
       ...baseInput({
@@ -166,7 +247,7 @@ function baseInput(overrides: Partial<RunPolicyInput> = {}): RunPolicyInput {
     prompt: 'hello',
     requestedCwd: '/repo/project',
     cwdRealpath: '/repo/project',
-    access: { ok: true, reason: 'allowed-user' },
+    access: { ok: true, reason: 'owner' },
     capability: claudeCapability(profileConfig),
     profileConfig,
     now: 1000,
@@ -179,6 +260,7 @@ function profile(options: {
   permissions?: {
     defaultAccess: AccessMode;
     maxAccess: AccessMode;
+    guestMaxAccess?: AccessMode;
   };
   attachments?: Partial<ProfileConfig['attachments']>;
 } = {}) {
