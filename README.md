@@ -103,6 +103,26 @@ lark-channel-bridge restart --profile codex
 lark-channel-bridge status --profile codex
 ```
 
+## WeCom (Enterprise WeChat)
+
+The bridge can also sit on a WeCom **AI bot long connection** (outbound WebSocket to `wss://openws.work.weixin.qq.com`, no public callback URL, no payload encryption). Same intake / queue / run-flow; only the transport differs (`src/bot/wecom/`).
+
+1. In the WeCom admin console create an AI bot → enable **API mode** → choose **long connection** → copy the **BotID** and **Secret**.
+2. Probe credentials, network, group @mentions, attachments and proactive push first:
+
+   ```bash
+   WECOM_BOT_ID=xxx WECOM_SECRET=yyy node tools/wecom-probe.mjs
+   ```
+
+3. Use a dedicated profile (WeCom userids and Feishu open_ids must not share an allowlist):
+
+   ```bash
+   lark-channel-bridge profile create wecom --tenant wecom --app-id <BotID> --app-secret <Secret> --workspace /path/to/project
+   lark-channel-bridge run --profile wecom
+   ```
+
+Platform differences to expect: groups only deliver messages that @mention the bot; no history API; no images/files in groups (DM only); replies are markdown only (cards are flattened to text, `messageReply: card` degrades to `markdown`); one stream must finish within 10 minutes (the bridge rolls over at 9); ≤ 20480 bytes per message; proactive push only to chats the user has already talked to; no doc comments / reactions / topics; lark-cli is left unbound (a BotID is not a Feishu app). Optional env: `WECOM_BOT_NAME`, `WECOM_WELCOME_TEXT`, `WECOM_STREAM_THROTTLE_MS`. See the Chinese README for the full table.
+
 ## Commands
 
 ### Host CLI

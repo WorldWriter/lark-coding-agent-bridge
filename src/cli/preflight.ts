@@ -14,6 +14,7 @@ import {
   withConfigFileLock,
 } from '../config/profile-store';
 import type { AppConfig } from '../config/schema';
+import { isWecomTenant } from '../config/schema';
 import { log } from '../core/logger';
 import {
   hasLarkCliUserAuth,
@@ -54,6 +55,12 @@ export async function preFlightChecks(opts: PreFlightOptions): Promise<void> {
 
 async function checkLarkCli(opts: PreFlightOptions): Promise<void> {
   if (opts.skipCheckLarkCli) return;
+  if (isWecomTenant(opts.bridgeConfig?.accounts.app.tenant)) {
+    // A WeCom BotID is not a Feishu app: binding lark-cli to it would fail.
+    // The agent keeps whatever lark-cli config the machine already has.
+    log.info('lark-cli', 'skip-bind', { reason: 'wecom-tenant' });
+    return;
+  }
   const bridgeConfig = opts.bridgeConfig;
   const appPaths = opts.appPaths;
   const privateBinding = bridgeConfig !== undefined && appPaths !== undefined && opts.larkChannel !== undefined;

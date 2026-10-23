@@ -17,6 +17,7 @@ import { resolveAppPaths } from '../config/app-paths';
 import { paths } from '../config/paths';
 import type { AgentKind } from '../config/profile-schema';
 import type { TenantBrand } from '../config/schema';
+import { isTenantBrand } from '../config/schema';
 import { writeFileAtomic } from '../platform/atomic-write';
 import { checkRuntimeLock } from './locks';
 
@@ -62,7 +63,7 @@ function isValidEntry(e: unknown): e is ProcessEntry {
     typeof x.id === 'string' &&
     typeof x.pid === 'number' &&
     typeof x.appId === 'string' &&
-    (x.tenant === 'feishu' || x.tenant === 'lark') &&
+    isTenantBrand(x.tenant) &&
     typeof x.profileName === 'string' &&
     (x.agentKind === 'claude' || x.agentKind === 'codex') &&
     typeof x.configPath === 'string' &&

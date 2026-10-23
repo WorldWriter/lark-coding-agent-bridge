@@ -37,7 +37,13 @@ import {
 } from '../config/profile-schema';
 import { permissionsToLegacySandbox } from '../config/permissions';
 import type { AppConfig, SecretInput, TenantBrand } from '../config/schema';
-import { isComplete, isSecretRef, secretKeyForApp } from '../config/schema';
+import {
+  isComplete,
+  isSecretRef,
+  isTenantBrand,
+  isWecomTenant,
+  secretKeyForApp,
+} from '../config/schema';
 import { resolveAppSecret } from '../config/secret-resolver';
 import {
   buildEncryptedAccountConfig,
@@ -449,14 +455,20 @@ async function resolveBootstrapAppConfig(opts: ResolveProfileRuntimeOptions): Pr
   }
   if (!appSecret) throw new Error('app secret is required');
   const tenant = tenantBrandFromString(opts.tenant);
-  const result = await validateAppCredentials(opts.appId, appSecret, tenant);
-  if (!result.ok) {
-    throw new Error(`app credentials validation failed: ${result.reason ?? 'unknown'}`);
-  }
-  if (result.botName) {
-    console.log(`✓ 应用凭证校验通过: ${result.botName}`);
+  if (isWecomTenant(tenant)) {
+    // WeCom has no token-exchange endpoint to validate against; the first
+    // `aibot_subscribe` on connect is the real check (40013 = bad credentials).
+    console.log('ℹ 企微 BotID/Secret 将在首次长连接认证时校验');
   } else {
-    console.log('✓ 应用凭证校验通过');
+    const result = await validateAppCredentials(opts.appId, appSecret, tenant);
+    if (!result.ok) {
+      throw new Error(`app credentials validation failed: ${result.reason ?? 'unknown'}`);
+    }
+    if (result.botName) {
+      console.log(`✓ 应用凭证校验通过: ${result.botName}`);
+    } else {
+      console.log('✓ 应用凭证校验通过');
+    }
   }
   return {
     accounts: {
@@ -475,8 +487,8 @@ function isInteractiveTerminal(): boolean {
 
 function tenantBrandFromString(value: string | undefined): TenantBrand {
   if (value === undefined) return 'feishu';
-  if (value === 'feishu' || value === 'lark') return value;
-  throw new Error(`unsupported tenant: ${value}`);
+  if (isTenantBrand(value)) return value;
+  throw new Error(`unsupported tenant: ${value} (expected feishu, lark or wecom)`);
 }
 
 function assertBootstrapAppMatchesExistingProfile(

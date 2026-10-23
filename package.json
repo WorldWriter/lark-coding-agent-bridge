@@ -44,6 +44,7 @@
   "dependencies": {
     "@clack/prompts": "^1.4.0",
     "@larksuiteoapi/node-sdk": "^1.65.0",
+    "@wecom/aibot-node-sdk": "1.0.7",
     "commander": "^12.1.0",
     "cross-spawn": "^7.0.6",
     "graceful-fs": "^4.2.11",

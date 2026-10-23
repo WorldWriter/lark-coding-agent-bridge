@@ -18,6 +18,12 @@ import { translateEvent } from './stream-json';
 export interface ClaudeAdapterOptions {
   binary?: string;
   larkChannel?: LarkChannelEnvContext;
+  /**
+   * `bridge` (default) injects LARK_CHANNEL* so lark-cli runs bot-bound.
+   * `none` leaves the agent's lark-cli environment untouched — used when the
+   * bridge is connected to WeCom, where the bot id is not a Feishu app.
+   */
+  larkCliBinding?: 'bridge' | 'none';
 }
 
 type ClaudeChild = SpawnedProcessByStdio<null, Readable, Readable>;
@@ -28,11 +34,13 @@ export class ClaudeAdapter implements AgentAdapter {
 
   private readonly binary: string;
   private readonly larkChannel: LarkChannelEnvContext | undefined;
+  private readonly larkCliBinding: 'bridge' | 'none';
   private botIdentity: AgentBotIdentity | undefined;
 
   constructor(opts: ClaudeAdapterOptions = {}) {
     this.binary = opts.binary ?? 'claude';
     this.larkChannel = opts.larkChannel;
+    this.larkCliBinding = opts.larkCliBinding ?? 'bridge';
   }
 
   setBotIdentity(identity: AgentBotIdentity): void {
@@ -67,7 +75,7 @@ export class ClaudeAdapter implements AgentAdapter {
       '--permission-mode',
       permissionMode,
       '--append-system-prompt',
-      buildBridgeSystemPrompt(this.botIdentity),
+      buildBridgeSystemPrompt(this.botIdentity, this.botIdentity?.platform),
     ];
     // Guest-tier runs must not inherit project/local settings: allow rules
     // accumulated there (e.g. Bash(...) from interactive sessions) would
@@ -80,7 +88,10 @@ export class ClaudeAdapter implements AgentAdapter {
 
     const child = spawnProcess(this.binary, args, {
       cwd: opts.cwd,
-      env: mergeProcessEnv(process.env, buildLarkChannelEnv(this.larkChannel)),
+      env: mergeProcessEnv(
+        process.env,
+        this.larkCliBinding === 'none' ? {} : buildLarkChannelEnv(this.larkChannel),
+      ),
       stdio: ['ignore', 'pipe', 'pipe'],
     }) as ClaudeChild;
 

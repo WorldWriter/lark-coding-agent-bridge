@@ -1,6 +1,6 @@
 import type { TenantBrand } from '../config/schema';
 
-const ENDPOINTS: Record<TenantBrand, string> = {
+const ENDPOINTS: Partial<Record<TenantBrand, string>> = {
   feishu: 'https://open.feishu.cn',
   lark: 'https://open.larksuite.com',
 };
@@ -37,6 +37,7 @@ export async function validateAppCredentials(
   tenant: TenantBrand,
 ): Promise<ValidationResult> {
   const base = ENDPOINTS[tenant];
+  if (!base) return { ok: false, reason: `tenant ${tenant} has no Feishu token endpoint` };
   let resp: Response;
   try {
     resp = await fetch(`${base}/open-apis/auth/v3/tenant_access_token/internal`, {

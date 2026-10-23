@@ -18,7 +18,7 @@ import {
   type ProfileConfig,
 } from '../../config/profile-schema';
 import type { AppConfig } from '../../config/schema';
-import { isComplete } from '../../config/schema';
+import { isComplete, isWecomTenant } from '../../config/schema';
 import { configureLogger, gcOldLogs, log, reportError } from '../../core/logger';
 import { loadTelemetryAdapter, telemetry } from '../../core/telemetry';
 import { gcMediaCache } from '../../media/cache';
@@ -418,6 +418,9 @@ export function createRuntimeAgent(
             : {}),
         }
       : undefined;
+  // On WeCom the bot id is not a Feishu app, so lark-cli must not be bound
+  // to it; the agent keeps the machine's regular lark-cli configuration.
+  const larkCliBinding = isWecomTenant(profileConfig.accounts.app.tenant) ? 'none' : 'bridge';
   if (profileConfig.agentKind === 'codex') {
     const codex = profileConfig.codex;
     if (!codex?.binaryPath) {
@@ -432,9 +435,10 @@ export function createRuntimeAgent(
       ignoreRules: codex.ignoreRules !== false,
       sandbox: profileConfig.sandbox.defaultMode,
       larkChannel,
+      larkCliBinding,
     });
   }
-  return new ClaudeAdapter({ larkChannel });
+  return new ClaudeAdapter({ larkChannel, larkCliBinding });
 }
 
 /**

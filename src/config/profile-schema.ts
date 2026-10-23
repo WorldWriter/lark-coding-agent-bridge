@@ -4,6 +4,7 @@ import type {
   MessageReplyMode,
   SecretsConfig,
 } from './schema';
+import { isTenantBrand } from './schema';
 import {
   normalizePermissions,
   permissionsToLegacySandbox,
@@ -211,7 +212,7 @@ function normalizeAccounts(input: unknown): ProfileConfig['accounts'] {
   }
   const accounts = input as { app?: Partial<AppCredentials> };
   const app = accounts.app;
-  if (!app?.id || !app.secret || (app.tenant !== 'feishu' && app.tenant !== 'lark')) {
+  if (!app?.id || !app.secret || !isTenantBrand(app.tenant)) {
     throw new Error('accounts.app is incomplete');
   }
   return {

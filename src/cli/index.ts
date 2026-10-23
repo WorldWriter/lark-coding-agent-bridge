@@ -43,7 +43,7 @@ program
   .option('--workspace <path>', 'initial working directory for first-run profile bootstrap')
   .option('--app-id <id>', 'use an existing Lark/Feishu app instead of QR app creation')
   .option('--app-secret <secret>', 'App Secret for --app-id; prefer interactive input on shared machines')
-  .option('--tenant <tenant>', 'tenant for --app-id (feishu or lark; default feishu)')
+  .option('--tenant <tenant>', 'tenant for --app-id (feishu, lark or wecom; default feishu)')
   .option('--skip-check-lark-cli', 'skip lark-cli pre-flight check (auto-install + bind)')
   .action(async (opts: {
     config?: string;
@@ -86,7 +86,7 @@ profile
   .option('--workspace <path>', 'initial working directory for this profile')
   .option('--app-id <id>', 'use an existing Lark/Feishu app instead of QR app creation')
   .option('--app-secret <secret>', 'App Secret for --app-id; prefer interactive input on shared machines')
-  .option('--tenant <tenant>', 'tenant for --app-id (feishu or lark; default feishu)')
+  .option('--tenant <tenant>', 'tenant for --app-id (feishu, lark or wecom; default feishu)')
   .action(async (name: string, opts: {
     agent?: string;
     workspace?: string;
@@ -158,7 +158,7 @@ program
   .option('--workspace <path>', 'initial working directory for first-run profile bootstrap')
   .option('--app-id <id>', 'use an existing Lark/Feishu app instead of QR app creation')
   .option('--app-secret <secret>', 'App Secret for --app-id; prefer interactive input on shared machines')
-  .option('--tenant <tenant>', 'tenant for --app-id (feishu or lark; default feishu)')
+  .option('--tenant <tenant>', 'tenant for --app-id (feishu, lark or wecom; default feishu)')
   .option('--skip-check-lark-cli', 'skip lark-cli pre-flight check (auto-install + bind)')
   .action(async (opts: {
     profile?: string;
