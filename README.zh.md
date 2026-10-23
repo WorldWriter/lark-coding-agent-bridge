@@ -118,11 +118,13 @@ lark-channel-bridge status --profile codex
 3. 单独建一个 profile（企微的 userid 和飞书 open_id 不能混在一个白名单里）：
 
    ```bash
-   lark-channel-bridge profile create wecom --tenant wecom --app-id <BotID> --app-secret <Secret> --workspace /path/to/project
+   lark-channel-bridge profile create wecom --agent codex --tenant wecom --app-id <BotID> --owner <userid> --workspace /path/to/project
    lark-channel-bridge run --profile wecom
    ```
 
-   然后把 `~/.lark-channel/config.json` 里该 profile 的 `access.allowedUsers` / `admins` 填成企微 **userid**，`access.admins[0]` 同时充当 bot owner。
+   Secret 在终端中隐藏输入并保存到本机加密存储。`--owner` 必填，使用企微 **userid**，保存为 `access.admins[0]`。其他成员或群可在该 profile 的 `access.allowedUsers` / `allowedChats` 中配置。新建企微 Codex profile 默认保留执行策略 `.rules`（`ignoreRules: false`）。
+
+   Mac mini 完整安装、知识库准备、迁机和验收步骤见 [部署说明](docs/wecom-codex-macmini.md)。
 
 与飞书相比的硬差异（来自企微平台，不是 bridge 的限制）：
 

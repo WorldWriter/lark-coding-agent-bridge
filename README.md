@@ -117,9 +117,11 @@ The bridge can also sit on a WeCom **AI bot long connection** (outbound WebSocke
 3. Use a dedicated profile (WeCom userids and Feishu open_ids must not share an allowlist):
 
    ```bash
-   lark-channel-bridge profile create wecom --tenant wecom --app-id <BotID> --app-secret <Secret> --workspace /path/to/project
+   lark-channel-bridge profile create wecom --agent codex --tenant wecom --app-id <BotID> --owner <userid> --workspace /path/to/project
    lark-channel-bridge run --profile wecom
    ```
+
+The terminal prompts for the Secret and stores it in the local encrypted keystore. `--owner` is required and must be a WeCom userid. New WeCom Codex profiles load execution-policy `.rules` files. See [Mac mini deployment](docs/wecom-codex-macmini.md).
 
 Platform differences to expect: groups only deliver messages that @mention the bot; no history API; no images/files in groups (DM only); replies are markdown only (cards are flattened to text, `messageReply: card` degrades to `markdown`); one stream must finish within 10 minutes (the bridge rolls over at 9); ≤ 20480 bytes per message; proactive push only to chats the user has already talked to; no doc comments / reactions / topics; lark-cli is left unbound (a BotID is not a Feishu app). Optional env: `WECOM_BOT_NAME`, `WECOM_WELCOME_TEXT`, `WECOM_STREAM_THROTTLE_MS`. See the Chinese README for the full table.
 

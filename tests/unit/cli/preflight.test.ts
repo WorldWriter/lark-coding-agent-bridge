@@ -1234,3 +1234,29 @@ async function writeRootConfig(configPath: string, profile: string): Promise<Roo
   await saveRootConfig(rootConfig, configPath);
   return profileConfig;
 }
+
+
+describe('WeCom preflight', () => {
+  it('rejects a missing owner even when lark-cli checks are skipped', async () => {
+    const profileConfig = createDefaultProfileConfig({
+      agentKind: 'codex', codex: { binaryPath: 'codex' },
+      accounts: { app: { id: 'bot', secret: 'test', tenant: 'wecom' } },
+    });
+    await expect(preFlightChecks({
+      bridgeConfig: { accounts: profileConfig.accounts }, profileConfig, skipCheckLarkCli: true,
+    })).rejects.toThrow('access.admins[0]');
+  });
+
+  it('accepts a configured owner without installing or binding lark-cli', async () => {
+    const profileConfig = createDefaultProfileConfig({
+      agentKind: 'codex', codex: { binaryPath: 'codex' },
+      accounts: { app: { id: 'bot', secret: 'test', tenant: 'wecom' } },
+      access: { admins: ['owner-user'] },
+    });
+    mocks.spawnProcess.mockClear();
+    mocks.spawnProcessSync.mockClear();
+    await preFlightChecks({ bridgeConfig: { accounts: profileConfig.accounts }, profileConfig });
+    expect(mocks.spawnProcess).not.toHaveBeenCalled();
+    expect(mocks.spawnProcessSync).not.toHaveBeenCalled();
+  });
+});

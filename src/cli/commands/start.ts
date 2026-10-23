@@ -76,6 +76,7 @@ export interface StartOptions {
   appId?: string;
   appSecret?: string;
   tenant?: string;
+  owner?: string;
   skipCheckLarkCli?: boolean;
   confirmStopRuntimeLockProcess?: (err: RuntimeLockConflictError) => boolean | Promise<boolean>;
   stopRuntimeLockProcess?: (meta: RuntimeLockMeta) => StopProcessEntryResult | Promise<StopProcessEntryResult>;

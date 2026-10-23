@@ -15,6 +15,7 @@ export interface BootstrapProfileInput {
   defaultWorkspace?: string;
   codexBinaryPath?: string;
   profileDir?: string;
+  owner?: string;
 }
 
 export async function createBootstrapProfileConfig(
@@ -34,7 +35,15 @@ export async function createBootstrapProfileConfig(
     accounts: input.accounts,
     preferences: input.preferences,
     secrets: input.secrets,
-    ...(codex ? { codex } : {}),
+    ...(codex
+      ? { codex: {
+          ...codex,
+          ...(input.accounts.app.tenant === 'wecom' ? { ignoreRules: false } : {}),
+        } }
+      : {}),
+    ...(input.accounts.app.tenant === 'wecom' && input.owner?.trim()
+      ? { access: { admins: [input.owner.trim()] } }
+      : {}),
   });
   if (workspace) {
     profile.workspaces = {

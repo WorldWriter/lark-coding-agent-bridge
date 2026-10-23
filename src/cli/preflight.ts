@@ -50,6 +50,9 @@ export interface PreFlightOptions {
 }
 
 export async function preFlightChecks(opts: PreFlightOptions): Promise<void> {
+  if (isWecomTenant(opts.bridgeConfig?.accounts.app.tenant) && !opts.profileConfig?.access.admins[0]?.trim()) {
+    throw new Error('企微 profile 缺少 owner：请在 access.admins[0] 配置企业微信 userid；新建时使用 --owner <userid>。');
+  }
   await checkLarkCli(opts);
 }
 

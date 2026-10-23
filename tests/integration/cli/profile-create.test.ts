@@ -103,6 +103,45 @@ describe('profile create command', () => {
     });
   });
 
+  it.each([false, true])('creates a WeCom Codex profile with an owner (existing root: %s)', async (existing) => {
+    const root = await makeRoot();
+    const workspace = join(root, 'portable project');
+    await mkdir(workspace);
+    if (existing) await writeProfiles(root, 'claude', ['claude']);
+    const codex = await writeVersionExecutable(root, 'codex', 'codex 1.2.3');
+    vi.stubEnv('LARK_CHANNEL_CODEX_BIN', codex);
+    auth.validateAppCredentials.mockClear();
+    try {
+      await runProfileCreate('wecom-codex', {
+        rootDir: root, agent: 'codex', workspace,
+        appId: 'bot-test', appSecret: 'test-wecom-secret', tenant: 'wecom', owner: ' owner-user ',
+      });
+      const configPath = join(root, 'config.json');
+      const savedText = await readFile(configPath, 'utf8');
+      const saved = await loadRootConfig(configPath);
+      const profile = saved!.profiles['wecom-codex']!;
+      expect(profile.access.admins).toEqual(['owner-user']);
+      expect(profile.codex?.ignoreRules).toBe(false);
+      expect(profile.codex?.binaryPath).toBe(codex);
+      expect(profile.workspaces.default).toBe(await realpath(workspace));
+      expect(profile.accounts.app.tenant).toBe('wecom');
+      expect(savedText).not.toContain('test-wecom-secret');
+      expect(auth.validateAppCredentials).not.toHaveBeenCalled();
+      expect(saved!.activeProfile).toBe(existing ? 'claude' : 'wecom-codex');
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it.each([undefined, '   '])('rejects a WeCom profile without an owner before saving credentials (%s)', async (owner) => {
+    const root = await makeRoot();
+    await expect(runProfileCreate('wecom-codex', {
+      rootDir: root, agent: 'codex', tenant: 'wecom', owner,
+      appId: 'bot-test', appSecret: 'test-secret',
+    })).rejects.toThrow('--owner');
+    await expect(readFile(join(root, 'config.json'))).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
   it('refuses to overwrite an existing profile', async () => {
     const root = await makeRoot();
     await writeProfiles(root, 'claude', ['claude']);
