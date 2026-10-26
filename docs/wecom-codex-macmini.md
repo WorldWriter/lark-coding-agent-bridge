@@ -2,6 +2,8 @@
 
 此版本复用企微长连接 channel 和 Codex CLI adapter。消息进入 bridge 后，Codex 在指定项目目录工作，结果回到企微。WorkBuddy 无需安装。
 
+> 2026-10-26 交接记录见 [wecom-handoff-20261026.md](wecom-handoff-20261026.md)：已验收能力、文档审批阻塞、实际检索路径和切换顺序。旧版知识库中的 2026-09-29 飞书/Claude 迁移清单不是本次企微/Codex 的启动方案。
+
 本地离线测试只能验证配置、权限路由和协议转换；BotID/Secret 认证、真实模型、群 @、文件回传和跨 10 分钟任务需要在目标机器验收。
 
 ## 1. 准备目标机器
@@ -73,6 +75,8 @@ wecom-cli auth init --noninteractive
 ```
 
 CLI 版本至少 1.2.1。使用运行 bridge 的同一个 macOS 用户，确保 launchd 的 PATH 能找到 `wecom-cli`，skills 可被 Codex 读取。授权凭据默认由 CLI 加密保存在 `~/.config/wecom`，不要入库或放入源码包；Mac mini 上重新授权。
+
+`authorized` 只表示 CLI 凭据已配置。若文档读取返回 `851008`、提示未授权「搜索与获取文档内容」，须由机器人创建者在企微「工作台 → 智能机器人 → 对应机器人」申请该能力并完成管理员审批，再重试原表；重复扫码不能代替能力审批。授权链接可能失效，不在部署文档里保存临时链接。
 
 验收必须读取真实文档：对用户提供的在线表格先执行 `sheet workbook get`，再按返回的子表和范围执行 `sheet cells get`。只有返回真实单元格、确认范围和截断状态后才算通过。匿名网页可打开、CLI 显示 authorized，都不能代替文档权限验收。读取测试不修改表格及分享权限。
 
