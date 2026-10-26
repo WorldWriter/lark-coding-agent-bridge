@@ -3,6 +3,7 @@ dist/
 coverage/
 *.log
 *.tsbuildinfo
+__pycache__/
 
 .env
 .env.local
@@ -15,5 +16,7 @@ coverage/
 
 # Local maintenance scripts and unreleased changelog are not part of the package
 scripts/
+!skills/product-rag/scripts/
+!skills/product-rag/scripts/product_rag.py
 CHANGELOG.md
 tests-smoke/

@@ -24,6 +24,8 @@
   "files": [
     "dist",
     "bin",
+    "skills/product-rag",
+    "tools/install-product-rag.py",
     "README.md",
     "README.zh.md",
     "LICENSE"
@@ -36,6 +38,7 @@
     "test:unit": "vitest run tests/unit --passWithNoTests",
     "test:integration": "vitest run tests/integration --passWithNoTests",
     "test:process": "vitest run tests/process --passWithNoTests",
+    "test:product-rag": "python3 -m unittest discover -s tests/python -p 'test_product_rag_skill.py'",
     "ci:local": "git diff --check && pnpm test && pnpm typecheck && pnpm build",
     "ci:platform": "pnpm test && pnpm typecheck && pnpm build",
     "prepare": "npm run build",

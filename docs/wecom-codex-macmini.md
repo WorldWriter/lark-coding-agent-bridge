@@ -82,6 +82,35 @@ CLI 版本至少 1.2.1。使用运行 bridge 的同一个 macOS 用户，确保 
 
 当前 CLI 身份属于运行 bridge 的本机账号，不能作为多用户权限隔离机制；此个人助手保持 owner 使用，不因安装文档工具而扩大聊天访问白名单。
 
+## 本地私募与 FCN 产品 RAG（可选）
+
+bridge 附带 `skills/product-rag`，安装后 Codex 可按产品问题自动选择它。它调用 AgentCore 的只读 CLI；不需要额外模型调用或生产凭据，也不会自动刷新镜像。
+
+先在目标机准备 Python >=3.12、含 `product_rag_cli.py` 的 AgentCore 分支与依赖，以及完整的本地产品镜像（包括 `snapshot.json`、facts、PDF 和 `index.sqlite`）。源码包不包含产品数据。
+
+在 bridge 仓库运行，路径按目标机器实际位置填写：
+
+```sh
+python3 tools/install-product-rag.py \
+  --workspace "$HOME/projects/nexus_ai" \
+  --agentcore "$HOME/projects/nexus-agentcore" \
+  --python "$HOME/projects/nexus-agentcore/.venv/bin/python" \
+  --snapshot "$HOME/data/product-rag/snapshot" \
+  --tenant bjjg
+```
+
+安装器先做本地查询和租户核验，再安装到该 workspace 的 `.agents/skills/product-rag`。本机路径只写 `config.local.json`，权限为 0600；不修改 bridge profile、全局 Codex 配置或现有 skill。已有同名 skill 时会停止，需先查看差异再更新。机器路径、产品镜像不应进入 Git 或公开发布包。
+
+用运行 bridge 的同一用户，从配置的 workspace 测试：
+
+```sh
+python3 .agents/skills/product-rag/scripts/product_rag.py get_product_kb_status
+```
+
+然后在新的企微会话各问一道私募和 FCN，要求同时核对产品事实、PDF 正文与原始页码。已有会话若未发现新 skill，显式要求读取 `.agents/skills/product-rag/SKILL.md` 后再问。普通查询不需要重启长连接；只在复制更新的 bridge 程序后按正常流程重启。
+
+回答应保留快照日期、报告期、份额、OCR 不确定性及发行人模板范围。团队讨论检索仍使用 `kb-search`；本 skill 负责产品数据。工具脚本的离线检查为 `pnpm test:product-rag`，真实问答需在用户授权后单独执行。
+
 ## 4. 前台验收
 
 确保旧机器没有运行同一 BotID，再执行：
