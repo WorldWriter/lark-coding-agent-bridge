@@ -59,6 +59,25 @@ node bin/lark-channel-bridge.mjs profile create wecom-codex \
 - 当前 `codex exec` adapter 是非交互执行，固定 `approval_policy="never"`，不提供企微点击批准命令的闭环；不要把“批准”文字当成能解除沙箱限制的按钮。
 - 旧版企微 profile 若没有 owner，启动会明确报错；补齐 `access.admins[0]` 后重启。若要保留执行策略，将旧 profile 的 `codex.ignoreRules` 显式设为 `false`。
 
+## 企微在线文档工具（每台运行机器单独安装和授权）
+
+消息长连接不包含在线文档读取能力。为 Codex 安装官方 CLI 和文档 skills：
+
+```sh
+npm install -g @wecom/cli
+npx skills add WeComTeam/wecom-cli --skill wecomcli-shared wecomcli-doc-manage wecomcli-doc wecomcli-sheet wecomcli-smartsheet wecomcli-smartpage --agent codex -g -y
+wecom-cli --version
+wecom-cli auth show --status
+# 仅未授权时，由 owner 在本机扫码：
+wecom-cli auth init --noninteractive
+```
+
+CLI 版本至少 1.2.1。使用运行 bridge 的同一个 macOS 用户，确保 launchd 的 PATH 能找到 `wecom-cli`，skills 可被 Codex 读取。授权凭据默认由 CLI 加密保存在 `~/.config/wecom`，不要入库或放入源码包；Mac mini 上重新授权。
+
+验收必须读取真实文档：对用户提供的在线表格先执行 `sheet workbook get`，再按返回的子表和范围执行 `sheet cells get`。只有返回真实单元格、确认范围和截断状态后才算通过。匿名网页可打开、CLI 显示 authorized，都不能代替文档权限验收。读取测试不修改表格及分享权限。
+
+当前 CLI 身份属于运行 bridge 的本机账号，不能作为多用户权限隔离机制；此个人助手保持 owner 使用，不因安装文档工具而扩大聊天访问白名单。
+
 ## 4. 前台验收
 
 确保旧机器没有运行同一 BotID，再执行：
