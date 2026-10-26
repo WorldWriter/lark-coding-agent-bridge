@@ -1,4 +1,17 @@
-export type TenantBrand = 'feishu' | 'lark';
+/**
+ * `feishu` / `lark` are the two Feishu-family tenants (same SDK, different
+ * domain). `wecom` is Enterprise WeChat's AI-bot long connection — a
+ * different SDK and message model, selected in `startChannel`.
+ */
+export type TenantBrand = 'feishu' | 'lark' | 'wecom';
+
+export function isTenantBrand(value: unknown): value is TenantBrand {
+  return value === 'feishu' || value === 'lark' || value === 'wecom';
+}
+
+export function isWecomTenant(tenant: TenantBrand | undefined): boolean {
+  return tenant === 'wecom';
+}
 
 /**
  * SecretRef points at a secret stored outside this file — keeps secrets out

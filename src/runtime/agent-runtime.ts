@@ -4,6 +4,7 @@ import { AgentPreflightError, type AgentAvailability } from '../agent/preflight'
 import type { AgentAdapter } from '../agent/types';
 import type { AppPaths } from '../config/app-paths';
 import type { AgentKind, ProfileConfig } from '../config/profile-schema';
+import { isWecomTenant } from '../config/schema';
 import type { AcquiredRuntimeLock } from './locks';
 
 /**
@@ -33,6 +34,7 @@ export function createRuntimeAgent(
             : {}),
         }
       : undefined;
+  const larkCliBinding = isWecomTenant(profileConfig.accounts.app.tenant) ? 'none' : 'bridge';
   if (profileConfig.agentKind === 'codex') {
     const codex = profileConfig.codex;
     if (!codex?.binaryPath) {
@@ -40,6 +42,7 @@ export function createRuntimeAgent(
     }
     return new CodexAdapter({
       binary: codex.binaryPath,
+      model: codex.model,
       profileStateDir: appPaths.profileDir,
       ...(codex.codexHome ? { codexHome: codex.codexHome } : {}),
       inheritCodexHome: codex.inheritCodexHome === true,
@@ -47,9 +50,10 @@ export function createRuntimeAgent(
       ignoreRules: codex.ignoreRules !== false,
       sandbox: profileConfig.sandbox.defaultMode,
       larkChannel,
+      larkCliBinding,
     });
   }
-  return new ClaudeAdapter({ larkChannel });
+  return new ClaudeAdapter({ larkChannel, larkCliBinding });
 }
 
 export async function checkRuntimeAgentAvailability(agent: AgentAdapter): Promise<AgentAvailability> {

@@ -5,6 +5,12 @@ export type ClaudePermissionMode = 'default' | 'acceptEdits' | 'bypassPermission
 export interface PermissionConfig {
   defaultAccess: AccessMode;
   maxAccess: AccessMode;
+  /**
+   * Ceiling for non-owner actors (allowedUsers / admins / allowedChats /
+   * comment mentions). Owner runs are not affected. Defaults to 'workspace'
+   * so guests can read and edit files but cannot run privileged tools.
+   */
+  guestMaxAccess?: AccessMode;
   claude?: {
     permissionMode?: ClaudePermissionMode;
   };
@@ -29,6 +35,12 @@ const ACCESS_ORDER: Record<AccessMode, number> = {
   workspace: 1,
   full: 2,
 };
+
+export const GUEST_DEFAULT_MAX_ACCESS: AccessMode = 'workspace';
+
+export function resolveGuestMaxAccess(permissions: PermissionConfig): AccessMode {
+  return permissions.guestMaxAccess ?? GUEST_DEFAULT_MAX_ACCESS;
+}
 
 const CLAUDE_PERMISSION_ACCESS: Record<ClaudePermissionMode, AccessMode> = {
   plan: 'read-only',
@@ -156,6 +168,7 @@ function normalizeCanonicalPermissions(
 
   const explicitMaxAccess = readAccess(input.maxAccess, 'maxAccess');
   const explicitDefaultAccess = readAccess(input.defaultAccess, 'defaultAccess');
+  const explicitGuestMaxAccess = readAccess(input.guestMaxAccess, 'guestMaxAccess');
   const maxAccess = explicitMaxAccess ?? base.maxAccess;
   const defaultAccess =
     explicitDefaultAccess ??
@@ -169,6 +182,7 @@ function normalizeCanonicalPermissions(
   return {
     defaultAccess,
     maxAccess,
+    ...(explicitGuestMaxAccess ? { guestMaxAccess: explicitGuestMaxAccess } : {}),
     ...(claude ? { claude } : {}),
   };
 }

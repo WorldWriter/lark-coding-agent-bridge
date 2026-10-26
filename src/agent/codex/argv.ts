@@ -23,7 +23,6 @@ export function buildCodexArgs(input: BuildCodexArgsInput): string[] {
   const globalFlags = [
     '--sandbox',
     input.sandbox,
-    ...(input.model ? ['--model', input.model] : []),
     '-c',
     'approval_policy="never"',
     '-c',
@@ -35,6 +34,7 @@ export function buildCodexArgs(input: BuildCodexArgsInput): string[] {
     input.cwd,
   ];
 
+  const modelFlags = input.model?.trim() ? ['--model', input.model.trim()] : [];
   const imageFlags = (input.images ?? []).flatMap((path) => ['--image', path]);
 
   if (input.threadId) {
@@ -43,6 +43,7 @@ export function buildCodexArgs(input: BuildCodexArgsInput): string[] {
       ...globalFlags,
       'resume',
       '--json',
+      ...modelFlags,
       ...imageFlags,
       input.threadId,
       '-',
@@ -53,6 +54,7 @@ export function buildCodexArgs(input: BuildCodexArgsInput): string[] {
     'exec',
     '--json',
     ...globalFlags,
+    ...modelFlags,
     ...imageFlags,
     ...(imageFlags.length > 0 ? ['--'] : []),
     '-',

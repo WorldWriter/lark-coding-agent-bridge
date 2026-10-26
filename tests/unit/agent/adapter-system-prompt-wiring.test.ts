@@ -18,6 +18,8 @@ import {
 } from '../../../src/agent/bridge-system-prompt';
 import { ClaudeAdapter } from '../../../src/agent/claude/adapter';
 import { CodexAdapter } from '../../../src/agent/codex/adapter';
+import { createRuntimeAgent } from '../../../src/runtime/agent-runtime';
+import { createDefaultProfileConfig } from '../../../src/config/profile-schema';
 
 interface FakeChild extends EventEmitter {
   pid: number;
@@ -122,3 +124,44 @@ async function readAll(stream: PassThrough): Promise<string> {
   }
   return Buffer.concat(chunks).toString('utf8');
 }
+
+
+describe('WeCom runtime factory after supervisor migration', () => {
+  it.each([undefined, 'session-model'])('preserves the profile model unless a run overrides it (%s)', async (model) => {
+    const child = fakeChild();
+    spawnMock.spawnProcess.mockReturnValue(child);
+    const agent = createRuntimeAgent(createDefaultProfileConfig({
+      agentKind: 'codex',
+      accounts: { app: { id: 'bot-test', secret: 'test-only', tenant: 'wecom' } },
+      codex: { binaryPath: '/usr/local/bin/codex', model: 'profile-model' },
+    }), { profileDir: '/tmp/wecom-test', rootDir: '/tmp/bridge-test', profile: 'wecom-test' });
+    agent.setBotIdentity?.({ openId: 'bot-test', platform: 'wecom' });
+    agent.run({ runId: 'wecom-model', prompt: '查本地产品', cwd: '/tmp', threadId: 'thread-test', model });
+
+    const [, args, options] = spawnMock.spawnProcess.mock.calls[0]!;
+    expect(args.filter((arg: string) => arg === '--model')).toHaveLength(1);
+    expect(args[args.indexOf('--model') + 1]).toBe(model ?? 'profile-model');
+    expect(args.indexOf('--model')).toBeGreaterThan(args.indexOf('resume'));
+    expect(options.env.LARK_CHANNEL).toBe(process.env.LARK_CHANNEL);
+    expect(options.env.LARK_CHANNEL_PROFILE).toBe(process.env.LARK_CHANNEL_PROFILE);
+    expect(await readAll(child.stdin)).toContain('企业微信');
+  });
+
+  it('keeps Claude WeCom prompts in a file and skips Feishu binding', async () => {
+    const child = fakeChild();
+    spawnMock.spawnProcess.mockReturnValue(child);
+    const agent = createRuntimeAgent(createDefaultProfileConfig({
+      agentKind: 'claude',
+      accounts: { app: { id: 'bot-test', secret: 'test-only', tenant: 'wecom' } },
+    }), { profileDir: '/tmp/wecom-test', rootDir: '/tmp/bridge-test', profile: 'wecom-test' });
+    agent.setBotIdentity?.({ openId: 'bot-test', platform: 'wecom' });
+    agent.run({ runId: 'wecom-claude', prompt: '查本地产品', cwd: '/tmp', permissionMode: 'plan' });
+
+    const [, args, options] = spawnMock.spawnProcess.mock.calls[0]!;
+    expect(args).toContain('--setting-sources');
+    expect(options.env.LARK_CHANNEL).toBe(process.env.LARK_CHANNEL);
+    expect(options.env.LARK_CHANNEL_PROFILE).toBe(process.env.LARK_CHANNEL_PROFILE);
+    expect(readFileSync(args[args.indexOf('--append-system-prompt-file') + 1], 'utf8')).toContain('企业微信');
+    expect(await readAll(child.stdin)).toBe('查本地产品');
+  });
+});

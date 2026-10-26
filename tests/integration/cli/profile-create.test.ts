@@ -10,6 +10,7 @@ import {
   type RootConfig,
 } from '../../../src/config/profile-schema';
 import { loadRootConfig } from '../../../src/config/profile-store';
+import { materializeEnvSecretForService } from '../../../src/runtime/profile-runtime';
 import { getSecret } from '../../../src/config/keystore';
 import { secretKeyForApp } from '../../../src/config/schema';
 import { writeVersionExecutable } from '../../helpers/fake-executable';
@@ -101,6 +102,60 @@ describe('profile create command', () => {
       defaultMode: 'danger-full-access',
       maxMode: 'danger-full-access',
     });
+  });
+
+  it.each([false, true])('creates a WeCom Codex profile with an owner (existing root: %s)', async (existing) => {
+    const root = await makeRoot();
+    const workspace = join(root, 'portable project');
+    await mkdir(workspace);
+    if (existing) await writeProfiles(root, 'claude', ['claude']);
+    const codex = await writeVersionExecutable(root, 'codex', 'codex 1.2.3');
+    vi.stubEnv('LARK_CHANNEL_CODEX_BIN', codex);
+    auth.validateAppCredentials.mockClear();
+    try {
+      await runProfileCreate('wecom-codex', {
+        rootDir: root, agent: 'codex', workspace,
+        appId: 'bot-test', appSecret: 'test-wecom-secret', tenant: 'wecom', owner: ' owner-user ',
+      });
+      const configPath = join(root, 'config.json');
+      const savedText = await readFile(configPath, 'utf8');
+      const saved = await loadRootConfig(configPath);
+      const profile = saved!.profiles['wecom-codex']!;
+      expect(profile.access.admins).toEqual(['owner-user']);
+      expect(profile.codex?.ignoreRules).toBe(false);
+      expect(profile.codex?.binaryPath).toBe(codex);
+      expect(profile.workspaces.default).toBe(await realpath(workspace));
+      expect(profile.accounts.app.tenant).toBe('wecom');
+      expect(savedText).not.toContain('test-wecom-secret');
+      expect(auth.validateAppCredentials).not.toHaveBeenCalled();
+      expect(saved!.activeProfile).toBe(existing ? 'claude' : 'wecom-codex');
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it.each([undefined, '   '])('rejects a WeCom profile without an owner before saving credentials (%s)', async (owner) => {
+    const root = await makeRoot();
+    await expect(runProfileCreate('wecom-codex', {
+      rootDir: root, agent: 'codex', tenant: 'wecom', owner,
+      appId: 'bot-test', appSecret: 'test-secret',
+    })).rejects.toThrow('--owner');
+    await expect(readFile(join(root, 'config.json'))).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('materializes an environment secret into the service keystore instead of encrypting its template', async () => {
+    const root = await makeRoot();
+    const codex = await writeVersionExecutable(root, 'codex', 'codex 1.2.3');
+    vi.stubEnv('LARK_CHANNEL_CODEX_BIN', codex);
+    vi.stubEnv('WECOM_TEST_SECRET', 'actual-test-secret');
+    try {
+      await runProfileCreate('wecom', { rootDir: root, agent: 'codex', tenant: 'wecom',
+        appId: 'bot-env', appSecret: '${WECOM_TEST_SECRET}', owner: 'owner' });
+      const config = join(root, 'config.json');
+      expect(await materializeEnvSecretForService({ config, profile: 'wecom' })).toBe(true);
+      expect(await getSecret(secretKeyForApp('bot-env'), resolveAppPaths({ rootDir: root, profile: 'wecom' }))).toBe('actual-test-secret');
+      expect(await readFile(config, 'utf8')).not.toContain('actual-test-secret');
+    } finally { vi.unstubAllEnvs(); }
   });
 
   it('refuses to overwrite an existing profile', async () => {

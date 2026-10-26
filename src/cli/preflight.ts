@@ -14,6 +14,7 @@ import {
   withConfigFileLock,
 } from '../config/profile-store';
 import type { AppConfig } from '../config/schema';
+import { isWecomTenant } from '../config/schema';
 import { log } from '../core/logger';
 import {
   hasLarkCliUserAuth,
@@ -49,11 +50,20 @@ export interface PreFlightOptions {
 }
 
 export async function preFlightChecks(opts: PreFlightOptions): Promise<void> {
+  if (isWecomTenant(opts.bridgeConfig?.accounts.app.tenant) && !opts.profileConfig?.access.admins[0]?.trim()) {
+    throw new Error('企微 profile 缺少 owner：请在 access.admins[0] 配置企业微信 userid；新建时使用 --owner <userid>。');
+  }
   await checkLarkCli(opts);
 }
 
 async function checkLarkCli(opts: PreFlightOptions): Promise<void> {
   if (opts.skipCheckLarkCli) return;
+  if (isWecomTenant(opts.bridgeConfig?.accounts.app.tenant)) {
+    // A WeCom BotID is not a Feishu app: binding lark-cli to it would fail.
+    // The agent keeps whatever lark-cli config the machine already has.
+    log.info('lark-cli', 'skip-bind', { reason: 'wecom-tenant' });
+    return;
+  }
   const bridgeConfig = opts.bridgeConfig;
   const appPaths = opts.appPaths;
   const privateBinding = bridgeConfig !== undefined && appPaths !== undefined && opts.larkChannel !== undefined;

@@ -74,6 +74,8 @@ export interface AgentRun {
 export interface AgentBotIdentity {
   openId: string;
   name?: string;
+  /** Which IM the bridge is connected to; drives platform notes in the system prompt. */
+  platform?: 'feishu' | 'wecom';
 }
 
 export interface AgentAdapter {

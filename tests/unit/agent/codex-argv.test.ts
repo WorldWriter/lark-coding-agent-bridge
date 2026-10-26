@@ -108,7 +108,7 @@ describe('Codex argv contract', () => {
     ]);
   });
 
-  it('forwards the selected model as a global --model flag before resume', () => {
+  it('forwards the selected model exactly once to the resume subcommand', () => {
     const args = buildCodexArgs({
       cwd: '/repo',
       sandbox: 'workspace-write',
@@ -118,8 +118,9 @@ describe('Codex argv contract', () => {
     expect(args).toContain('--model');
     const modelIdx = args.indexOf('--model');
     expect(args[modelIdx + 1]).toBe('gpt-5-codex');
-    // Global flag: must come before the `resume` subcommand.
-    expect(modelIdx).toBeLessThan(args.indexOf('resume'));
+    // Resume has its own model flag; do not leave the selection on the parent command.
+    expect(modelIdx).toBeGreaterThan(args.indexOf('resume'));
+    expect(args.filter((arg) => arg === '--model')).toHaveLength(1);
   });
 
   it('omits --model when no model is selected', () => {
@@ -136,4 +137,16 @@ describe('Codex argv contract', () => {
     ).toContain('--ignore-user-config');
   });
 
+});
+
+
+describe('per-profile Codex model override', () => {
+  it.each([undefined, 'thread-123'])('passes a model to fresh/resumed turns (%s)', (threadId) => {
+    const args = buildCodexArgs({ cwd: '/repo', sandbox: 'read-only', model: 'test-model', threadId });
+    expect(args.slice(args.indexOf('--model'), args.indexOf('--model') + 2)).toEqual(['--model', 'test-model']);
+    if (threadId) expect(args.indexOf('--model')).toBeGreaterThan(args.indexOf('resume'));
+  });
+  it('inherits the CLI model when no override is supplied', () => {
+    expect(buildCodexArgs({ cwd: '/repo', sandbox: 'read-only' })).not.toContain('--model');
+  });
 });

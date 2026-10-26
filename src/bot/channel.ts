@@ -5,6 +5,7 @@ import type {
 } from '@larksuite/channel';
 import { createLarkChannel } from '@larksuite/channel';
 import { dirname, join } from 'node:path';
+import { HttpsProxyAgent } from 'https-proxy-agent';
 import { claudeCapability, codexCapability } from '../agent/capability';
 import { modelLabel, normalizeModelSelection, resolveModelArg } from '../agent/models';
 import {
@@ -37,6 +38,7 @@ import {
   getMessageReplyMode,
   getRunIdleTimeoutMs,
   getShowToolCalls,
+  isWecomTenant,
 } from '../config/schema';
 import { resolveAppSecret } from '../config/secret-resolver';
 import { log, reportMetric, withTrace } from '../core/logger';
@@ -67,6 +69,7 @@ import { fetchQuotedContext, fetchTopicContext, type QuotedContext } from './quo
 import { lookupMessageThreadId } from './thread-id';
 import { addWorkingReaction, removeReaction } from './reaction';
 import { fetchKnownChats } from './lark-info';
+import { createWecomChannel } from './wecom/channel';
 import type { AppPaths } from '../config/app-paths';
 import {
   consumeCotEvents,
@@ -85,6 +88,21 @@ const BRIDGE_AGENT_INSTRUCTIONS = [
   'Codex bridge 默认使用 danger-full-access 对齐 Claude bridge 的 bypassPermissions 行为，因此 lark-cli 应能像用户本机终端一样访问 keychain。',
   '如果提示 lark-channel context detected but not bound，停止当前操作并请用户重启 bridge 或运行 bridge doctor/preflight；不要改用普通 profile，不要自行 bind，也不要直接读取 config.json 里的账号或密钥。',
 ];
+
+// WeCom runs lark-cli unbound (the bot id is not a Feishu app), so the
+// bridge-bound guidance above would mislead the agent.
+const WECOM_AGENT_INSTRUCTIONS = [
+  '你在 bridge 进程中运行，当前会话来自企业微信（WeCom）而不是飞书；bridge_context 里的 id 是企微 userid / chatid。',
+  '回复只有 markdown 文本：没有卡片、按钮、表情回应；企微 markdown 不支持表格，用列表代替。',
+  'lark-cli 使用本机普通配置（未绑定到本 bot），可用于飞书文档/知识库操作，但不要用它往当前企微会话发消息。',
+];
+
+function envInt(name: string): number | undefined {
+  const raw = process.env[name];
+  if (!raw) return undefined;
+  const n = Number.parseInt(raw, 10);
+  return Number.isFinite(n) && n > 0 ? n : undefined;
+}
 
 // Lark SDK logs API errors at error level even when the caller catches them.
 // These specific codes are EXPECTED in our flow (wiki-node lookup that
@@ -212,11 +230,13 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
   // switch can inject a one-time "model changed" note into the next (resumed)
   // prompt. In-memory only: on restart the first run re-seeds silently.
   const lastRunModelByScope = new Map<string, string>();
-  const cotClient = new CotClient({
-    tenant: cfg.accounts.app.tenant,
-    appId: cfg.accounts.app.id,
-    appSecret,
-  });
+  const cotClient = cfg.accounts.app.tenant === 'wecom'
+    ? undefined
+    : new CotClient({
+        tenant: cfg.accounts.app.tenant,
+        appId: cfg.accounts.app.id,
+        appSecret,
+      });
   const threadModeOverrideWarnedChats = new Set<string>();
   const logThreadModeOverride: LogThreadModeOverride = ({ chatId, resolvedMode, threadId }) => {
     const fields = { chatId, cachedMode: resolvedMode, threadId };
@@ -269,7 +289,25 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
     respectProxyEnv: true,
   };
 
-  const channel = createLarkChannel(opts);
+  const wecom = isWecomTenant(cfg.accounts.app.tenant);
+  const proxyUrl = process.env.HTTPS_PROXY ?? process.env.HTTP_PROXY;
+  // WeCom: a different SDK and message model behind the shared
+  // channel helpers. The cast is deliberate — WecomChannel implements the
+  // subset of LarkChannel the bridge uses and answers rawClient calls through
+  // a shim that throws a named error for anything Feishu-only.
+  const channel: LarkChannel = wecom
+    ? (createWecomChannel({
+        botId: cfg.accounts.app.id,
+        secret: appSecret,
+        ...(process.env.WECOM_BOT_NAME ? { botName: process.env.WECOM_BOT_NAME } : {}),
+        ...(controls.profileConfig.access.admins[0]
+          ? { ownerId: controls.profileConfig.access.admins[0] }
+          : {}),
+        ...(proxyUrl ? { proxyAgent: new HttpsProxyAgent(proxyUrl) } : {}),
+        ...(process.env.WECOM_WELCOME_TEXT ? { welcomeText: process.env.WECOM_WELCOME_TEXT } : {}),
+        ...(envInt('WECOM_STREAM_THROTTLE_MS') ? { streamThrottleMs: envInt('WECOM_STREAM_THROTTLE_MS') } : {}),
+      }) as unknown as LarkChannel)
+    : createLarkChannel(opts);
   const media = new MediaCache(channel, deps.appPaths?.mediaDir);
 
   // Pending → run handoff: while a run is active on a chat, block its pending
@@ -482,6 +520,8 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
     agent.setBotIdentity?.({
       openId: identity.openId,
       ...(identity.name ? { name: identity.name } : {}),
+      // Feishu keeps the historical payload shape; only WeCom announces itself.
+      ...(wecom ? { platform: 'wecom' as const } : {}),
     });
   }
   log.info('ws', 'connected', {
@@ -496,8 +536,9 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
   // App-level keepalive: 15s probe + wake-up detection + HTTP reachability.
   // Defense-in-depth — the SDK's pingTimeout watchdog handles half-dead WS,
   // this catches anything that the SDK misses (silent state stuck, etc.).
-  const probeDomain =
-    cfg.accounts.app.tenant === 'lark'
+  const probeDomain = wecom
+    ? 'https://qyapi.weixin.qq.com'
+    : cfg.accounts.app.tenant === 'lark'
       ? 'https://open.larksuite.com'
       : 'https://open.feishu.cn';
   const keepalive = startKeepalive({
@@ -796,7 +837,7 @@ interface RunBatchDeps {
   media: MediaCache;
   batch: NormalizedMessage[];
   controls: Controls;
-  cotClient: CotClient;
+  cotClient: CotClient | undefined;
   callbackAuth?: CallbackAuth;
   activePolicyFingerprints: Map<string, string>;
   lastRunModelByScope: Map<string, string>;
@@ -921,6 +962,7 @@ async function runAgentBatch(deps: RunBatchDeps): Promise<void> {
     topicContext,
     channel.botIdentity,
     extraInstructions,
+    isWecomTenant(controls.cfg.accounts.app.tenant) ? 'wecom' : 'feishu',
   );
   log.info('prompt', 'built', {
     promptChars: prompt.length,
@@ -1040,10 +1082,15 @@ async function runAgentBatch(deps: RunBatchDeps): Promise<void> {
     log.info('flush', 'idle-watchdog', { idleTimeoutMs });
   }
 
-  const replyMode = getMessageReplyMode(controls.cfg);
-  log.info('flush', 'reply-mode', { mode: replyMode });
+  const configuredReplyMode = getMessageReplyMode(controls.cfg);
+  // WeCom has no editable cards: card mode degrades to streamed markdown.
+  const replyMode =
+    configuredReplyMode === 'card' && isWecomTenant(controls.cfg.accounts.app.tenant)
+      ? 'markdown'
+      : configuredReplyMode;
+  log.info('flush', 'reply-mode', { mode: replyMode, configured: configuredReplyMode });
   const cotMessages = getCotMessages(controls.cfg);
-  const cotEnabled = cotMessages !== 'off';
+  const cotEnabled = cotMessages !== 'off' && cotClient !== undefined;
 
   // Re-read prefs on every flush so toggling /config mid-stream takes
   // effect immediately. Cheap object lookups, no allocation when on.
@@ -1074,7 +1121,7 @@ async function runAgentBatch(deps: RunBatchDeps): Promise<void> {
     cotEnabled || replyMode === 'card' ? undefined : addWorkingReaction(channel, lastMsg.messageId);
 
   try {
-    if (cotEnabled) {
+    if (cotEnabled && cotClient) {
       const cotPublisher = new CotPublisher({
         client: cotClient,
         chatId,
@@ -1807,6 +1854,7 @@ function buildPrompt(
   topicContext: QuotedContext[] = [],
   botIdentity?: { openId: string; name?: string },
   extraInstructions?: string[],
+  platform: 'feishu' | 'wecom' = 'feishu',
 ): string {
   const first = batch[0];
   if (!first) return '';
@@ -1846,10 +1894,10 @@ function buildPrompt(
       messageIds: batch.map((m) => m.messageId),
       source: 'im',
     },
-    instructions:
-      extraInstructions && extraInstructions.length > 0
-        ? [...BRIDGE_AGENT_INSTRUCTIONS, ...extraInstructions]
-        : BRIDGE_AGENT_INSTRUCTIONS,
+    instructions: [
+      ...(platform === 'wecom' ? WECOM_AGENT_INSTRUCTIONS : BRIDGE_AGENT_INSTRUCTIONS),
+      ...(extraInstructions ?? []),
+    ],
     userInput: userPart,
     ...(topicContext.length > 0 ? { topicContext: topicContext.map(toPromptTopicMessage) } : {}),
     quotedMessages: quotes.map(toPromptQuote),

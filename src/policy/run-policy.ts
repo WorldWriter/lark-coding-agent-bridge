@@ -3,6 +3,7 @@ import {
   accessToClaudePermissionMode,
   accessToCodexSandbox,
   clampAccess,
+  resolveGuestMaxAccess,
   type AccessMode,
   type ClaudePermissionMode,
   type CodexSandboxMode,
@@ -104,11 +105,19 @@ export function evaluateRunPolicy(input: RunPolicyInput): RunPolicyResult {
     return reject('required-attachment-rejected', '必需附件未通过校验，已拒绝运行。');
   }
 
-  const accessMode = clampAccess(
+  const profileAccessMode = clampAccess(
     input.profileConfig.permissions.defaultAccess,
     input.profileConfig.permissions.maxAccess,
     input.capability.permissions.maxAccess,
   );
+  // Only the runtime owner runs at the profile tier; every other allowed
+  // actor (allowedUsers / admins / allowedChats / comment mentions) is
+  // additionally capped by guestMaxAccess.
+  const guestMaxAccess = resolveGuestMaxAccess(input.profileConfig.permissions);
+  const accessMode =
+    input.access.reason === 'owner'
+      ? profileAccessMode
+      : clampAccess(profileAccessMode, guestMaxAccess, guestMaxAccess);
   const sandbox = accessToCodexSandbox(accessMode);
   const permissionMode = accessToClaudePermissionMode(
     accessMode,

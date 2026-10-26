@@ -19,6 +19,7 @@ import { buildCodexArgs } from './argv';
 import { CodexJsonlTranslator, type CodexFinishReason } from './jsonl';
 
 export interface CodexAdapterOptions {
+  model?: string;
   binary: string;
   profileStateDir: string;
   codexHome?: string;
@@ -28,6 +29,8 @@ export interface CodexAdapterOptions {
   sandbox?: SandboxMode;
   stopGraceMs?: number;
   larkChannel?: LarkChannelEnvContext;
+  /** See ClaudeAdapterOptions.larkCliBinding. */
+  larkCliBinding?: 'bridge' | 'none';
 }
 
 type CodexChild = SpawnedProcessByStdio<Writable, Readable, Readable>;
@@ -37,6 +40,7 @@ export class CodexAdapter implements AgentAdapter {
   readonly displayName = 'Codex CLI';
 
   private readonly binary: string;
+  private readonly model: string | undefined;
   private readonly profileStateDir: string;
   private readonly codexHome: string | undefined;
   private readonly inheritCodexHome: boolean;
@@ -45,10 +49,12 @@ export class CodexAdapter implements AgentAdapter {
   private readonly sandbox: SandboxMode;
   private readonly defaultStopGraceMs: number;
   private readonly larkChannel: LarkChannelEnvContext | undefined;
+  private readonly larkCliBinding: 'bridge' | 'none';
   private botIdentity: AgentBotIdentity | undefined;
 
   constructor(opts: CodexAdapterOptions) {
     this.binary = opts.binary;
+    this.model = opts.model;
     this.profileStateDir = opts.profileStateDir;
     this.codexHome = opts.codexHome;
     this.inheritCodexHome = opts.inheritCodexHome !== false;
@@ -57,6 +63,7 @@ export class CodexAdapter implements AgentAdapter {
     this.sandbox = opts.sandbox ?? 'danger-full-access';
     this.defaultStopGraceMs = opts.stopGraceMs ?? 5000;
     this.larkChannel = opts.larkChannel;
+    this.larkCliBinding = opts.larkCliBinding ?? 'bridge';
   }
 
   setBotIdentity(identity: AgentBotIdentity): void {
@@ -95,14 +102,15 @@ export class CodexAdapter implements AgentAdapter {
 
     const args = buildCodexArgs({
       cwd: opts.cwd,
+      model: opts.model ?? this.model,
       sandbox: opts.sandbox ?? this.sandbox,
       threadId: opts.threadId,
       images: opts.images,
       ignoreUserConfig: this.ignoreUserConfig,
       ignoreRules: this.ignoreRules,
-      model: opts.model,
     });
-    const envOverrides: NodeJS.ProcessEnv = buildLarkChannelEnv(this.larkChannel);
+    const envOverrides: NodeJS.ProcessEnv =
+      this.larkCliBinding === 'none' ? {} : buildLarkChannelEnv(this.larkChannel);
     if (this.codexHome) {
       envOverrides.CODEX_HOME = this.codexHome;
     } else if (!this.inheritCodexHome) {
@@ -120,7 +128,7 @@ export class CodexAdapter implements AgentAdapter {
       hasThread: Boolean(opts.threadId),
       promptChars: opts.prompt.length,
       images: opts.images?.length ?? 0,
-      model: opts.model,
+      model: opts.model ?? this.model,
     });
 
     const stderrChunks: Buffer[] = [];
@@ -153,7 +161,10 @@ export class CodexAdapter implements AgentAdapter {
     child.stdin.on('error', (err) => {
       log.warn('agent', 'stdin-error', { message: err.message });
     });
-    child.stdin.end(prefixBridgeSystemPrompt(opts.prompt, this.botIdentity), 'utf8');
+    child.stdin.end(
+      prefixBridgeSystemPrompt(opts.prompt, this.botIdentity, this.botIdentity?.platform),
+      'utf8',
+    );
 
     const stopGraceMs = opts.stopGraceMs ?? this.defaultStopGraceMs;
 

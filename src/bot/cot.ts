@@ -4,7 +4,7 @@ import { log } from '../core/logger';
 import { toolHeaderText } from '../card/tool-render';
 import type { RunState } from '../card/run-state';
 
-const ENDPOINTS: Record<TenantBrand, string> = {
+const ENDPOINTS: Record<Exclude<TenantBrand, 'wecom'>, string> = {
   feishu: 'https://open.feishu.cn',
   lark: 'https://open.larksuite.com',
 };
@@ -24,7 +24,7 @@ export class CotClient {
   private token: string | undefined;
   private tokenExpiresAt = 0;
 
-  constructor(opts: { tenant: TenantBrand; appId: string; appSecret: string }) {
+  constructor(opts: { tenant: Exclude<TenantBrand, 'wecom'>; appId: string; appSecret: string }) {
     this.baseUrl = ENDPOINTS[opts.tenant];
     this.appId = opts.appId;
     this.appSecret = opts.appSecret;

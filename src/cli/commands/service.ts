@@ -25,6 +25,7 @@ export interface ServiceStartOptions {
   appId?: string;
   appSecret?: string;
   tenant?: string;
+  owner?: string;
   /** Skip lark-cli auto-install + bind during `start`. */
   skipCheckLarkCli?: boolean;
   /** Install the supervisor+console service (`run --web-ui`) instead of a
@@ -157,6 +158,7 @@ async function ensureBridgeConfigured(
     appId: opts.appId,
     appSecret: opts.appSecret,
     tenant: opts.tenant,
+    owner: opts.owner,
     allowBootstrap: true,
     handleActiveBridgeMigrationConflict: async (err) => {
       const handled = await promptAndStopActiveBridgeMigrationConflict(err, {

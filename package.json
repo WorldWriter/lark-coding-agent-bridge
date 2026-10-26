@@ -28,6 +28,8 @@
   "files": [
     "dist",
     "bin",
+    "skills/product-rag",
+    "tools/install-product-rag.py",
     "README.md",
     "README.zh.md",
     "LICENSE"
@@ -42,6 +44,7 @@
     "test:unit": "vitest run tests/unit --passWithNoTests",
     "test:integration": "vitest run tests/integration --passWithNoTests",
     "test:process": "vitest run tests/process --passWithNoTests",
+    "test:product-rag": "python3 -m unittest discover -s tests/python -p 'test_product_rag_skill.py'",
     "ci:local": "git diff --check && pnpm test && pnpm typecheck && pnpm build",
     "ci:platform": "pnpm test && pnpm typecheck && pnpm build",
     "prepare": "npm run build",
@@ -50,9 +53,11 @@
   "dependencies": {
     "@clack/prompts": "^1.4.0",
     "@larksuite/channel": "^0.6.0",
+    "@wecom/aibot-node-sdk": "1.0.7",
     "commander": "^12.1.0",
     "cross-spawn": "^7.0.6",
     "graceful-fs": "^4.2.11",
+    "https-proxy-agent": "^9.0.0",
     "proper-lockfile": "^4.1.2",
     "qrcode-terminal": "^0.12.0"
   },

@@ -21,6 +21,12 @@ import { translateEvent } from './stream-json';
 export interface ClaudeAdapterOptions {
   binary?: string;
   larkChannel?: LarkChannelEnvContext;
+  /**
+   * `bridge` (default) injects LARK_CHANNEL* so lark-cli runs bot-bound.
+   * `none` leaves the agent's lark-cli environment untouched — used when the
+   * bridge is connected to WeCom, where the bot id is not a Feishu app.
+   */
+  larkCliBinding?: 'bridge' | 'none';
 }
 
 type ClaudeChild = SpawnedProcessByStdio<Writable, Readable, Readable>;
@@ -31,11 +37,13 @@ export class ClaudeAdapter implements AgentAdapter {
 
   private readonly binary: string;
   private readonly larkChannel: LarkChannelEnvContext | undefined;
+  private readonly larkCliBinding: 'bridge' | 'none';
   private botIdentity: AgentBotIdentity | undefined;
 
   constructor(opts: ClaudeAdapterOptions = {}) {
     this.binary = opts.binary ?? 'claude';
     this.larkChannel = opts.larkChannel;
+    this.larkCliBinding = opts.larkCliBinding ?? 'bridge';
   }
 
   setBotIdentity(identity: AgentBotIdentity): void {
@@ -68,24 +76,36 @@ export class ClaudeAdapter implements AgentAdapter {
     // stream-json response. Pass the prompt via stdin and the appended system
     // prompt via a temp file (the same approach the Codex adapter uses) so no
     // special characters ever reach the shell.
-    const systemPromptFile = writeSystemPromptFile(buildBridgeSystemPrompt(this.botIdentity));
+    const systemPromptFile = writeSystemPromptFile(
+      buildBridgeSystemPrompt(this.botIdentity, this.botIdentity?.platform),
+    );
 
+    const permissionMode = opts.permissionMode ?? CLAUDE_DEFAULT_PERMISSION_MODE;
     const args = [
       '-p',
       '--output-format',
       'stream-json',
       '--verbose',
       '--permission-mode',
-      opts.permissionMode ?? CLAUDE_DEFAULT_PERMISSION_MODE,
+      permissionMode,
       '--append-system-prompt-file',
       systemPromptFile.path,
     ];
+    // Guest-tier runs must not inherit project/local settings: allow rules
+    // accumulated there (e.g. Bash(...) from interactive sessions) would
+    // punch through the acceptEdits/plan permission gate in headless mode.
+    if (permissionMode !== 'bypassPermissions') {
+      args.push('--setting-sources', 'user');
+    }
     if (opts.sessionId) args.push('--resume', opts.sessionId);
     if (opts.model) args.push('--model', opts.model);
 
     const child = spawnProcess(this.binary, args, {
       cwd: opts.cwd,
-      env: mergeProcessEnv(process.env, buildLarkChannelEnv(this.larkChannel)),
+      env: mergeProcessEnv(
+        process.env,
+        this.larkCliBinding === 'none' ? {} : buildLarkChannelEnv(this.larkChannel),
+      ),
       stdio: ['pipe', 'pipe', 'pipe'],
     }) as ClaudeChild;
 

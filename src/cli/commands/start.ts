@@ -2,8 +2,6 @@ import dns from 'node:dns';
 import os from 'node:os';
 import { createInterface } from 'node:readline';
 import pkg from '../../../package.json';
-import { ClaudeAdapter } from '../../agent/claude/adapter';
-import { CodexAdapter } from '../../agent/codex/adapter';
 import {
   AgentPreflightError,
   formatAgentPreflightDiagnostic,
@@ -90,6 +88,7 @@ export interface StartOptions {
   appId?: string;
   appSecret?: string;
   tenant?: string;
+  owner?: string;
   skipCheckLarkCli?: boolean;
   /** Start the machine-wide supervisor + web console instead of a single
    * profile in the foreground. Default false → classic headless run. */

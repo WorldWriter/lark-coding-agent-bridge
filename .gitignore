@@ -8,6 +8,7 @@ web/dist/
 .corepack/
 *.log
 *.tsbuildinfo
+__pycache__/
 
 .env
 .env.local
@@ -20,5 +21,7 @@ web/dist/
 
 # Local maintenance scripts and unreleased changelog are not part of the package
 scripts/
+!skills/product-rag/scripts/
+!skills/product-rag/scripts/product_rag.py
 CHANGELOG.md
 tests-smoke/

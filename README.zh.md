@@ -104,6 +104,45 @@ lark-channel-bridge restart --profile codex
 lark-channel-bridge status --profile codex
 ```
 
+## 接入企业微信（WeCom）
+
+除飞书 / Lark 外，bridge 也能挂在**企业微信「智能机器人」长连接**上：本机出站连 `wss://openws.work.weixin.qq.com`，不需要公网回调、不需要加解密。实现是同一套 intake / 队列 / run-flow，只换了传输层（`src/bot/wecom/`）。
+
+1. 在企业微信管理后台创建智能机器人 → 开启「API 模式」→ 选「长连接」→ 记下 **BotID** 和 **Secret**（Secret 只显示一次）。
+2. 先用验门脚本确认凭证、网络、群 @、附件和主动推送：
+
+   ```bash
+   WECOM_BOT_ID=xxx WECOM_SECRET=yyy node tools/wecom-probe.mjs
+   # 连上后：私聊发文字 / 群里 @ 它 / 私聊发图片；--send <chatid> "文本" 测主动推送
+   ```
+
+3. 单独建一个 profile（企微的 userid 和飞书 open_id 不能混在一个白名单里）：
+
+   ```bash
+   lark-channel-bridge profile create wecom --agent codex --tenant wecom --app-id <BotID> --owner <userid> --workspace /path/to/project
+   lark-channel-bridge run --profile wecom
+   ```
+
+   Secret 在终端中隐藏输入并保存到本机加密存储。`--owner` 必填，使用企微 **userid**，保存为 `access.admins[0]`。其他成员或群可在该 profile 的 `access.allowedUsers` / `allowedChats` 中配置。新建企微 Codex profile 默认保留执行策略 `.rules`（`ignoreRules: false`）。
+
+   Mac mini 完整安装、知识库准备、迁机和验收步骤见 [部署说明](docs/wecom-codex-macmini.md)。
+
+与飞书相比的硬差异（来自企微平台，不是 bridge 的限制）：
+
+| 维度 | 企微智能机器人 |
+|---|---|
+| 群消息 | **只收 @ 机器人的消息**；`requireMentionInGroup` 形同虚设 |
+| 历史 / 未 @ 消息 | 没有任何接口 |
+| 群内图片 / 文件 | 收不到（仅单聊） |
+| 回复形态 | 只有 markdown（流式刷新）；卡片自动压平成文本，按钮变 `[文字]` 提示，`messageReply: card` 自动降级为 `markdown` |
+| 流式 | 同一 stream 10 分钟内必须结束，bridge 到 9 分钟自动换新 stream 续写（视觉上是第二条消息） |
+| 单条长度 | ≤ 20480 字节，超出截断并提示 |
+| 主动推送 | 只能推给"用户先聊过"的会话；没有入站帧时退化为 `aibot_send_msg` |
+| 文档评论 / 表情回应 / 话题 | 无；`/doc` `/account` `/new chat` 在企微上不可用 |
+| lark-cli | 不再绑定到本 bot（BotID 不是飞书应用），agent 使用本机普通 lark-cli 配置 |
+
+可选环境变量：`WECOM_BOT_NAME`（system prompt 里的自称）、`WECOM_WELCOME_TEXT`（用户首次进入单聊时的欢迎语）、`WECOM_STREAM_THROTTLE_MS`（流式刷新间隔，默认 2500，企微同一会话限 30 条/分钟）。
+
 ## 命令速查
 
 ### 宿主 CLI

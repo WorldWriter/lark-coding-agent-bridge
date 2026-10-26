@@ -33,6 +33,7 @@ export interface ProfileCreateOptions extends ProfileCommandOptions {
   appId?: string;
   appSecret?: string;
   tenant?: string;
+  owner?: string;
 }
 
 export interface ProfileRemoveOptions extends ProfileCommandOptions {
@@ -130,6 +131,7 @@ export async function runProfileCreate(
       appId: opts.appId,
       appSecret: opts.appSecret,
       tenant: opts.tenant,
+      owner: opts.owner,
       allowBootstrap: true,
     });
   });

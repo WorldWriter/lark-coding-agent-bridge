@@ -37,7 +37,13 @@ import {
 } from '../config/profile-schema';
 import { permissionsToLegacySandbox } from '../config/permissions';
 import type { AppConfig, SecretInput, TenantBrand } from '../config/schema';
-import { isComplete, isSecretRef, secretKeyForApp } from '../config/schema';
+import {
+  isComplete,
+  isSecretRef,
+  isTenantBrand,
+  isWecomTenant,
+  secretKeyForApp,
+} from '../config/schema';
 import { resolveAppSecret } from '../config/secret-resolver';
 import {
   buildEncryptedAccountConfig,
@@ -60,6 +66,7 @@ export interface ResolveProfileRuntimeOptions {
   appId?: string;
   appSecret?: string;
   tenant?: string;
+  owner?: string;
   allowBootstrap?: boolean;
   selectAgent?: (detected: DetectedAgent[]) => AgentKind | undefined | Promise<AgentKind | undefined>;
   handleActiveBridgeMigrationConflict?: (
@@ -216,6 +223,7 @@ export async function resolveProfileRuntime(
     workspace,
     defaultWorkspace: appPaths.defaultWorkspaceDir,
     profileDir: appPaths.profileDir,
+    owner: opts.owner,
   });
   const root = createRootConfig(profile, profileConfig, encrypted.secrets);
   await saveRootConfig(root, configPath);
@@ -245,6 +253,7 @@ async function bootstrapProfileIntoExistingRoot(args: {
     workspace,
     defaultWorkspace: appPaths.defaultWorkspaceDir,
     profileDir: appPaths.profileDir,
+    owner: opts.owner,
   });
   const nextRoot: RootConfig = {
     ...rootConfig,
@@ -427,6 +436,16 @@ async function migrateV1ToV2WithActiveBridgeHandling(
 }
 
 async function resolveBootstrapAppConfig(opts: ResolveProfileRuntimeOptions): Promise<AppConfig> {
+  const tenant = tenantBrandFromString(opts.tenant);
+  if (isWecomTenant(tenant) && !opts.owner?.trim()) {
+    throw new Error('企微首次配置需要 --owner <企业微信 userid>，作为机器人管理员；不是姓名或飞书 open_id。');
+  }
+  if (opts.owner !== undefined && !isWecomTenant(tenant)) {
+    throw new Error('--owner is only supported for wecom profiles');
+  }
+  if (isWecomTenant(tenant) && !opts.appId) {
+    throw new Error('企微首次配置需要 --app-id <BotID>；请在企微创建 API 模式长连接机器人。');
+  }
   if (!opts.appId) {
     if (!isInteractiveTerminal()) {
       throw new Error(
@@ -448,15 +467,20 @@ async function resolveBootstrapAppConfig(opts: ResolveProfileRuntimeOptions): Pr
     appSecret = await promptPassword(`输入 ${opts.appId} 的 App Secret: `);
   }
   if (!appSecret) throw new Error('app secret is required');
-  const tenant = tenantBrandFromString(opts.tenant);
-  const result = await validateAppCredentials(opts.appId, appSecret, tenant);
-  if (!result.ok) {
-    throw new Error(`app credentials validation failed: ${result.reason ?? 'unknown'}`);
-  }
-  if (result.botName) {
-    console.log(`✓ 应用凭证校验通过: ${result.botName}`);
+  if (isWecomTenant(tenant)) {
+    // WeCom has no token-exchange endpoint to validate against; the first
+    // `aibot_subscribe` on connect is the real check (40013 = bad credentials).
+    console.log('ℹ 企微 BotID/Secret 将在首次长连接认证时校验');
   } else {
-    console.log('✓ 应用凭证校验通过');
+    const result = await validateAppCredentials(opts.appId, appSecret, tenant);
+    if (!result.ok) {
+      throw new Error(`app credentials validation failed: ${result.reason ?? 'unknown'}`);
+    }
+    if (result.botName) {
+      console.log(`✓ 应用凭证校验通过: ${result.botName}`);
+    } else {
+      console.log('✓ 应用凭证校验通过');
+    }
   }
   return {
     accounts: {
@@ -475,8 +499,8 @@ function isInteractiveTerminal(): boolean {
 
 function tenantBrandFromString(value: string | undefined): TenantBrand {
   if (value === undefined) return 'feishu';
-  if (value === 'feishu' || value === 'lark') return value;
-  throw new Error(`unsupported tenant: ${value}`);
+  if (isTenantBrand(value)) return value;
+  throw new Error(`unsupported tenant: ${value} (expected feishu, lark or wecom)`);
 }
 
 function assertBootstrapAppMatchesExistingProfile(
@@ -484,6 +508,9 @@ function assertBootstrapAppMatchesExistingProfile(
   profile: string,
   profileConfig: ProfileConfig,
 ): void {
+  if (opts.owner !== undefined && opts.owner.trim() !== profileConfig.access.admins[0]) {
+    throw new Error(`profile ${profile} already exists; --owner only sets the owner during creation. Update access.admins explicitly to change it.`);
+  }
   if (!opts.appId || opts.appId === profileConfig.accounts.app.id) return;
   throw new Error(
     `profile already exists: ${profile}; it uses app ${profileConfig.accounts.app.id}. ` +
@@ -645,7 +672,8 @@ async function encryptedConfigForProfile(
   appPaths: Pick<AppPaths, 'secretsGetterScript' | 'secretsFile' | 'keystoreSaltFile'>,
 ): Promise<AppConfig> {
   const secret = cfg.accounts.app.secret;
-  if (typeof secret !== 'string') return cfg;
+  // Keep environment references resolvable; never encrypt the template itself.
+  if (typeof secret !== 'string' || isEnvBackedSecret(secret)) return cfg;
   const next = await buildEncryptedAccountConfig(
     cfg.accounts.app.id,
     cfg.accounts.app.tenant,
