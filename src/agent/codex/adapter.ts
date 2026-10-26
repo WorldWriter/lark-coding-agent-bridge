@@ -19,6 +19,7 @@ import { buildCodexArgs } from './argv';
 import { CodexJsonlTranslator, type CodexFinishReason } from './jsonl';
 
 export interface CodexAdapterOptions {
+  model?: string;
   binary: string;
   profileStateDir: string;
   codexHome?: string;
@@ -39,6 +40,7 @@ export class CodexAdapter implements AgentAdapter {
   readonly displayName = 'Codex CLI';
 
   private readonly binary: string;
+  private readonly model: string | undefined;
   private readonly profileStateDir: string;
   private readonly codexHome: string | undefined;
   private readonly inheritCodexHome: boolean;
@@ -52,6 +54,7 @@ export class CodexAdapter implements AgentAdapter {
 
   constructor(opts: CodexAdapterOptions) {
     this.binary = opts.binary;
+    this.model = opts.model;
     this.profileStateDir = opts.profileStateDir;
     this.codexHome = opts.codexHome;
     this.inheritCodexHome = opts.inheritCodexHome !== false;
@@ -99,6 +102,7 @@ export class CodexAdapter implements AgentAdapter {
 
     const args = buildCodexArgs({
       cwd: opts.cwd,
+      model: this.model,
       sandbox: opts.sandbox ?? this.sandbox,
       threadId: opts.threadId,
       images: opts.images,

@@ -1,6 +1,7 @@
 import type { SandboxMode } from '../../config/profile-schema';
 
 export interface BuildCodexArgsInput {
+  model?: string;
   cwd: string;
   sandbox: SandboxMode;
   threadId?: string;
@@ -32,6 +33,7 @@ export function buildCodexArgs(input: BuildCodexArgsInput): string[] {
     input.cwd,
   ];
 
+  const modelFlags = input.model?.trim() ? ['--model', input.model.trim()] : [];
   const imageFlags = (input.images ?? []).flatMap((path) => ['--image', path]);
 
   if (input.threadId) {
@@ -40,6 +42,7 @@ export function buildCodexArgs(input: BuildCodexArgsInput): string[] {
       ...globalFlags,
       'resume',
       '--json',
+      ...modelFlags,
       ...imageFlags,
       input.threadId,
       '-',
@@ -50,6 +53,7 @@ export function buildCodexArgs(input: BuildCodexArgsInput): string[] {
     'exec',
     '--json',
     ...globalFlags,
+    ...modelFlags,
     ...imageFlags,
     ...(imageFlags.length > 0 ? ['--'] : []),
     '-',

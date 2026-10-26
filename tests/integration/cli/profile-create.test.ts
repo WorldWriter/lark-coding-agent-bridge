@@ -10,6 +10,7 @@ import {
   type RootConfig,
 } from '../../../src/config/profile-schema';
 import { loadRootConfig } from '../../../src/config/profile-store';
+import { materializeEnvSecretForService } from '../../../src/runtime/profile-runtime';
 import { getSecret } from '../../../src/config/keystore';
 import { secretKeyForApp } from '../../../src/config/schema';
 import { writeVersionExecutable } from '../../helpers/fake-executable';
@@ -140,6 +141,21 @@ describe('profile create command', () => {
       appId: 'bot-test', appSecret: 'test-secret',
     })).rejects.toThrow('--owner');
     await expect(readFile(join(root, 'config.json'))).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('materializes an environment secret into the service keystore instead of encrypting its template', async () => {
+    const root = await makeRoot();
+    const codex = await writeVersionExecutable(root, 'codex', 'codex 1.2.3');
+    vi.stubEnv('LARK_CHANNEL_CODEX_BIN', codex);
+    vi.stubEnv('WECOM_TEST_SECRET', 'actual-test-secret');
+    try {
+      await runProfileCreate('wecom', { rootDir: root, agent: 'codex', tenant: 'wecom',
+        appId: 'bot-env', appSecret: '${WECOM_TEST_SECRET}', owner: 'owner' });
+      const config = join(root, 'config.json');
+      expect(await materializeEnvSecretForService({ config, profile: 'wecom' })).toBe(true);
+      expect(await getSecret(secretKeyForApp('bot-env'), resolveAppPaths({ rootDir: root, profile: 'wecom' }))).toBe('actual-test-secret');
+      expect(await readFile(config, 'utf8')).not.toContain('actual-test-secret');
+    } finally { vi.unstubAllEnvs(); }
   });
 
   it('refuses to overwrite an existing profile', async () => {

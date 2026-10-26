@@ -672,7 +672,8 @@ async function encryptedConfigForProfile(
   appPaths: Pick<AppPaths, 'secretsGetterScript' | 'secretsFile' | 'keystoreSaltFile'>,
 ): Promise<AppConfig> {
   const secret = cfg.accounts.app.secret;
-  if (typeof secret !== 'string') return cfg;
+  // Keep environment references resolvable; never encrypt the template itself.
+  if (typeof secret !== 'string' || isEnvBackedSecret(secret)) return cfg;
   const next = await buildEncryptedAccountConfig(
     cfg.accounts.app.id,
     cfg.accounts.app.tenant,

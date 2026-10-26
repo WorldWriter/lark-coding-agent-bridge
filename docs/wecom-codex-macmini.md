@@ -55,6 +55,7 @@ node bin/lark-channel-bridge.mjs profile create wecom-codex \
 
 - `access.admins[0]` 是 owner，可私聊和群 @ 使用；其他用户需配置 `access.allowedUsers`，群需配置 `access.allowedChats`。不要混用飞书 ID。
 - 权限沿用 bridge 默认值：owner 默认 full，其他人的执行权限默认上限 workspace。首轮只读验收可显式设置 `permissions.defaultAccess`、`maxAccess`、`guestMaxAccess` 均为 `read-only`；需要执行写任务时再按用途调整。
+- 如果 CLI 默认模型被当前登录账号拒绝，可在此 profile 的 `codex.model` 填入该账号实测可用的模型。bridge 会对新会话和续聊传入 `--model`，不修改全局 Codex 配置；未设置时仍沿用 CLI 默认值。
 - 当前 `codex exec` adapter 是非交互执行，固定 `approval_policy="never"`，不提供企微点击批准命令的闭环；不要把“批准”文字当成能解除沙箱限制的按钮。
 - 旧版企微 profile 若没有 owner，启动会明确报错；补齐 `access.admins[0]` 后重启。若要保留执行策略，将旧 profile 的 `codex.ignoreRules` 显式设为 `false`。
 

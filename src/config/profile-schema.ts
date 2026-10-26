@@ -33,6 +33,7 @@ export interface SandboxConfig {
 }
 
 export interface CodexConfig {
+  model?: string;
   binaryPath: string;
   realpath?: string;
   version?: string;
@@ -273,6 +274,7 @@ function normalizeWorkspaces(input: {
 function normalizeCodex(input: CodexConfig & { flags?: unknown }): CodexConfig {
   const codex: CodexConfig = {
     binaryPath: input.binaryPath,
+    ...(typeof input.model === 'string' && input.model.trim() ? { model: input.model.trim() } : {}),
     ...(typeof input.realpath === 'string' ? { realpath: input.realpath } : {}),
     ...(typeof input.version === 'string' ? { version: input.version } : {}),
     ...(typeof input.sha256 === 'string' ? { sha256: input.sha256 } : {}),
