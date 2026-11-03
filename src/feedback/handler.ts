@@ -56,7 +56,10 @@ export async function tryHandleFeedback(ctx: CommandContext): Promise<boolean> {
     replyTo: ctx.msg.messageId, ...(ctx.chatMode === 'topic' ? { replyInThread: true } : {}),
   });
   const saveAttachments = async (id: string) => {
-    if (ctx.msg.resources.length > 5) throw new FeedbackError('每次最多 5 个附件，本次附件未登记，请分批发送。');
+    const policy = ctx.controls.profileConfig.attachments;
+    const maxCount = Math.min(5, policy?.maxCount ?? 5);
+    if (ctx.msg.resources.length > maxCount) throw new FeedbackError(`当前配置每次最多 ${maxCount} 个附件，本次附件未登记，请分批发送。`);
+    let totalBytes = 0;
     const files: { file: string; name: string }[] = [];
     const blobDir = join(root, 'attachments', createHash('sha256').update(scope).digest('hex'));
     await mkdir(blobDir, { recursive: true, mode: 0o700 });
@@ -68,7 +71,13 @@ export async function tryHandleFeedback(ctx: CommandContext): Promise<boolean> {
       try {
         const result = await ctx.channel.downloadResourceToFile(ctx.msg.messageId, resource.fileKey, resource.type === 'image' ? 'image' : 'file', temporary);
         await chmod(temporary, 0o600);
-        if ((await stat(temporary)).size > 20 * 1024 * 1024) throw new FeedbackError('附件超过 20MB，未登记。请压缩后重试。');
+        const size = (await stat(temporary)).size;
+        totalBytes += size;
+        const maxFileBytes = Math.min(20 * 1024 * 1024, policy?.maxFileBytes ?? Infinity,
+          resource.type === 'image' ? (policy?.imageMaxBytes ?? Infinity) : Infinity);
+        if (size > maxFileBytes || totalBytes > (policy?.maxBytes ?? 100 * 1024 * 1024)) {
+          throw new FeedbackError('附件超过当前配置的文件或总大小限制，未登记。单文件上限最高 20MB，请压缩后重试。');
+        }
         await rename(temporary, target);
         const extensions: Record<string, string> = { 'image/png': '.png', 'image/jpeg': '.jpg', 'application/pdf': '.pdf', 'text/plain': '.txt' };
         const name = basename(resource.fileName ?? `attachment${extensions[result.contentType ?? ''] ?? '.bin'}`).replace(/[\x00-\x1f]/g, '').slice(0, 150) || 'attachment.bin';

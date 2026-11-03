@@ -36,7 +36,7 @@
 
 ## 发布、验证和回滚
 
-本次默认生效，无需手工启用；没有新增功能开关或依赖服务。现有访问白名单、群 @ 策略、显式权限限制仍会限制入口；不会被本次默认值覆盖。`LARK_CHANNEL_HOME` 继续指定配置根目录，显式配置路径优先于默认 `~/.lark-channel`；不更改 Codex 模型或登录配置。
+本次默认生效，无需手工启用；没有新增功能开关或依赖服务。附件数量取 `min(5, attachments.maxCount)`；单文件取 `min(20MB, attachments.maxFileBytes)`，图片另受 `attachments.imageMaxBytes` 限制，总量遵循 `attachments.maxBytes`。显式更严格配置覆盖上限；反馈附件是持久业务记录，不随临时缓存 TTL 清理。现有访问白名单、群 @ 策略、显式权限限制仍会限制入口；不会被本次默认值覆盖。`LARK_CHANNEL_HOME` 继续指定配置根目录，显式配置路径优先于默认 `~/.lark-channel`；不更改 Codex 模型或登录配置。
 
 1. 核对目标机器、当前运行 profile、Git SHA 与配置根；备份完整 profile 的 `feedback/`（首次部署无该目录）。不要从临时 worktree 直接注册常驻服务。
 2. 将通过审查的提交同步到目标长期部署目录，执行 `pnpm install --frozen-lockfile`、`pnpm typecheck`、`pnpm build`。沿用现有 Node/pnpm/企微 SDK，无新依赖。

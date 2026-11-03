@@ -1,7 +1,7 @@
 import { mkdtemp, rm, readdir, writeFile, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { FeedbackStore } from '../../../src/feedback/store';
 import { parseFeedback } from '../../../src/feedback/handler';
 import { tryHandleCommand, type CommandContext } from '../../../src/commands';
@@ -106,6 +106,16 @@ describe('feedback chat flow without an LLM', () => {
     await h.run(''); expect(h.last()).toContain('未能确认成功'); expect(h.last()).not.toContain('secret');
     h.ctx.msg.resources = []; await h.run(`查看反馈 ${id}`); expect(h.last()).toContain('附件：0 个');
     await h.run('取消反馈附件'); expect(h.last()).toContain('已取消');
+  });
+  it('honors stricter attachment policy and expires pending uploads visibly', async () => {
+    const h = await harness(); h.ctx.msg.chatType = 'p2p'; h.ctx.chatMode = 'p2p';
+    await h.run('反馈：限制'); const id = h.last().match(/FB-[a-f0-9-]{36}/)![0];
+    await h.run(`反馈附件 ${id}`);
+    h.ctx.controls.profileConfig.attachments = { maxCount: 0 } as never;
+    h.ctx.msg.resources = [{ type: 'file', fileKey: 'key' }];
+    await h.run(''); expect(h.last()).toContain('最多 0 个附件');
+    const now = Date.now(); const clock = vi.spyOn(Date, 'now').mockReturnValue(now + 700_000);
+    try { await h.run(''); expect(h.last()).toContain('超过 10 分钟'); } finally { clock.mockRestore(); }
   });
   it('reports storage failure rather than success', async () => {
     const h = await harness();

@@ -78,24 +78,30 @@ export class FeedbackStore {
         item.attachments.push(...files.map(file => ({ ...file, messageId })));
         item.events.push({ messageId, actor, at: new Date().toISOString(), action: '附件', text: `已保存 ${files.length} 个附件` });
       }
-      if (ledger.pending?.[actor]?.id === id) delete ledger.pending[actor];
+      if (ledger.pending?.[`user:${actor}`]?.id === id) delete ledger.pending[`user:${actor}`];
     });
   }
   async selectAttachment(actor: string, id: string): Promise<void> {
     await this.transaction((records, ledger) => {
       if (!records.some(r => r.id === id)) throw new FeedbackError('当前私聊没有这个反馈编号。');
       ledger.pending ??= {};
-      ledger.pending[actor] = { id, expires: Date.now() + 600_000 };
+      ledger.pending[`user:${actor}`] = { id, expires: Date.now() + 600_000 };
     });
   }
   async pendingAttachment(actor: string): Promise<string | undefined> {
-    return this.transaction((_records, ledger) => {
-      const p = ledger.pending?.[actor];
-      return p && p.expires > Date.now() ? p.id : undefined;
+    const result = await this.transaction((_records, ledger) => {
+      const p = ledger.pending?.[`user:${actor}`];
+      if (p && p.expires <= Date.now()) {
+        delete ledger.pending![`user:${actor}`];
+        return { expired: true, id: undefined };
+      }
+      return { expired: false, id: p?.id };
     });
+    if (result.expired) throw new FeedbackError('等待附件已超过 10 分钟，请重新发送“反馈附件 编号”再上传。');
+    return result.id;
   }
   async clearAttachment(actor: string): Promise<void> {
-    await this.transaction((_records, ledger) => { if (ledger.pending) delete ledger.pending[actor]; });
+    await this.transaction((_records, ledger) => { if (ledger.pending) delete ledger.pending[`user:${actor}`]; });
   }
   async list(): Promise<Feedback[]> { return this.transaction(records => structuredClone(records)); }
   async update(id: string, action: string, text: string, actor: string, messageId: string, admin: boolean): Promise<Feedback> {
