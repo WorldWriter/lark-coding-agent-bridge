@@ -1,3 +1,4 @@
+import { tryHandleFeedback } from '../feedback/handler';
 import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
@@ -214,6 +215,7 @@ function isAdminCommand(cmd: string): boolean {
 }
 
 export async function tryHandleCommand(ctx: CommandContext): Promise<boolean> {
+  if (await tryHandleFeedback(ctx)) return true;
   const trimmed = ctx.msg.content.trim();
   if (!trimmed.startsWith('/')) return false;
   const parts = trimmed.split(/\s+/);
